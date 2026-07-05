@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASTRA-TUNE. Real-time pitch correction for macOS</title>
+<meta name="description" content="ASTRA-TUNE is a free, open source pitch correction plugin. AU, VST3 and standalone today, AAX-ready for Pro Tools. Try the engine live in your browser.">
+<meta property="og:title" content="ASTRA-TUNE. Real-time pitch correction">
+<meta property="og:description" content="Free, open source autotune plugin for macOS. Hard tune or invisible cleanup. Try it live in your browser.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <a class="mark" href="#top" aria-label="ASTRA-TUNE home">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect width="26" height="26" rx="6" fill="#10161f"/><path d="M4 16 L8 16 L10 8 L13 20 L16 11 L18 16 L22 16" stroke="#35e0ff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>ASTRA-TUNE</span>
+  </a>
+  <div class="nav-links">
+    <a href="#demo">Demo</a>
+    <a href="#features">Features</a>
+    <a href="#install">Install</a>
+    <a href="#support">Support</a>
+  </div>
+  <a class="cta-download cta-download-nav" href="downloads/ASTRA-TUNE-1.0.0.pkg" download>Download for macOS</a>
+</nav>
+
+<header class="hero" id="top">
+  <div class="hero-copy">
+    <h1>Pitch correction that lands on the note</h1>
+    <p>It finds the nearest note in your key and pulls the vocal onto it. Invisible cleanup to full robot.</p>
+    <div class="cta-row">
+      <a class="cta-download" href="downloads/ASTRA-TUNE-1.0.0.pkg" download>Download for macOS</a>
+      <a class="cta-try" href="#demo">Try it live<svg width="46" height="10" viewBox="0 0 46 10" aria-hidden="true"><path d="M1 5 Q6 0 11 5 T21 5 T31 5 T41 5 L45 5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></a>
+    </div>
+    <p class="hero-formats">AU + VST3 + Standalone now. AAX build target for Pro Tools included.</p>
+  </div>
+  <div class="hero-instrument">
+    <canvas id="pitchCanvas" aria-label="Interactive pitch correction visualization. Drag to detune, release to snap."></canvas>
+    <div class="instrument-hint" id="instrumentHint">drag the signal, release to snap</div>
+  </div>
+</header>
+
+<section class="demo" id="demo">
+  <h2>Try it in your browser</h2>
+  <p class="section-sub">This is the actual DSP engine, compiled for the web. Start the demo singer, or use your own voice.</p>
+  <div class="demo-panel">
+    <div class="demo-readout">
+      <div class="demo-note" id="demoNote">--</div>
+      <div class="demo-freq" id="demoFreq">idle</div>
+      <div class="demo-meter"><div class="demo-needle" id="demoNeedle"></div></div>
+    </div>
+    <div class="demo-controls">
+      <div class="field">
+        <label for="demoKey">Key</label>
+        <select id="demoKey"></select>
+      </div>
+      <div class="field">
+        <label for="demoScale">Scale</label>
+        <select id="demoScale">
+          <option value="major">Major</option>
+          <option value="minor">Natural Minor</option>
+          <option value="majpent">Major Pentatonic</option>
+          <option value="minpent">Minor Pentatonic</option>
+          <option value="chromatic">Chromatic</option>
+        </select>
+      </div>
+      <div class="field field-wide">
+        <label for="demoRetune">Retune speed <span id="demoRetuneVal">hard</span></label>
+        <input type="range" id="demoRetune" min="0" max="400" step="5" value="0">
+      </div>
+      <div class="field field-wide">
+        <label for="demoMix">Mix <span id="demoMixVal">100%</span></label>
+        <input type="range" id="demoMix" min="0" max="100" value="100">
+      </div>
+    </div>
+    <div class="demo-transport">
+      <button class="btn-demo-voice" id="demoVoiceBtn">Demo singer</button>
+      <button class="btn-mic" id="micBtn">Use my mic</button>
+      <button class="btn-stop" id="stopBtn" disabled>Stop</button>
+    </div>
+    <p class="demo-note-line">Headphones recommended with the mic, or the room will sing along.</p>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <h2>The controls that matter</h2>
+  <div class="feature-row">
+    <div class="feature-text">
+      <h3>One knob decides the character</h3>
+      <p>Retune speed at 0 ms snaps instantly for the hard robotic effect. Push it toward 400 ms and the correction turns into a slow glide nobody can hear working.</p>
+    </div>
+    <div class="feature-visual" aria-hidden="true">
+      <div class="dial-demo">
+        <div class="dial-track"><div class="dial-fill" id="dialFill"></div></div>
+        <div class="dial-labels"><span>hard tune</span><span>transparent</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="feature-row feature-row-flip">
+    <div class="feature-text">
+      <h3>Locked to your key</h3>
+      <p>Twelve keys, five scales. The detector runs every 11 ms and only ever lands on notes that belong in the song.</p>
+    </div>
+    <div class="feature-visual" aria-hidden="true">
+      <div class="mini-piano" id="miniPiano"></div>
+    </div>
+  </div>
+  <div class="spec-strip" role="list">
+    <div role="listitem"><span class="spec-num">15 ms</span><span class="spec-label">reported latency, host compensated</span></div>
+    <div role="listitem"><span class="spec-num">YIN</span><span class="spec-label">pitch detection, 11 ms hop</span></div>
+    <div role="listitem"><span class="spec-num">0 to 400 ms</span><span class="spec-label">retune speed range</span></div>
+    <div role="listitem"><span class="spec-num">MIT</span><span class="spec-label">license, source included</span></div>
+  </div>
+</section>
+
+<section class="install" id="install">
+  <h2>Install in a minute</h2>
+  <ol class="install-steps">
+    <li>
+      <div class="step-body">
+        <h3>Get the installer</h3>
+        <p>One signed-per-build macOS package, 4.3 MB. Pick the formats you want during install.</p>
+      </div>
+      <a class="cta-download" href="downloads/ASTRA-TUNE-1.0.0.pkg" download>Download for macOS</a>
+    </li>
+    <li>
+      <div class="step-body">
+        <h3>Choose your formats</h3>
+        <p>Audio Unit for Logic and GarageBand. VST3 for Live, Cubase and Reaper. A standalone app for the desktop. The AAX component appears automatically once built against the Avid SDK.</p>
+      </div>
+      <span class="mono-chip-row"><span>AU</span><span>VST3</span><span>APP</span><span>AAX</span></span>
+    </li>
+    <li>
+      <div class="step-body">
+        <h3>Insert on a vocal track</h3>
+        <p>Set the key, set the scale, pick a retune speed. That is the whole manual.</p>
+      </div>
+      <span class="mono-detail">SHA-256 10b8e8a6921b5247&hellip;</span>
+    </li>
+  </ol>
+</section>
+
+<section class="support" id="support">
+  <h2>Free, open source, caffeinated</h2>
+  <p>ASTRA-TUNE is MIT licensed and costs nothing. If it saved a take, you can buy the developer a coffee.</p>
+  <a class="bmc-button" href="https://buymeacoffee.com/vaytrex" target="_blank" rel="noopener">
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4 h13 a2 2 0 0 1 2 2 v2 a3 3 0 0 1 -3 3 h-.3 l-.9 6.2 A3 3 0 0 1 12.8 20 H9.2 a3 3 0 0 1 -3 -2.8 L5.2 8 Z M17.6 9 H18 a1 1 0 0 0 1 -1 V6.5 h-1.7 Z" fill="#0D0C22"/></svg>
+    Buy me a coffee
+  </a>
+</section>
+
+<footer>
+  <span>ASTRA-TUNE 1.0.0</span>
+  <span>MIT License</span>
+  <a href="https://buymeacoffee.com/vaytrex" target="_blank" rel="noopener">Buy me a coffee</a>
+</footer>
+
+<script src="site.js"></script>
+</body>
+</html>
