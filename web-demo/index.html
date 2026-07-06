@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASTRA-TUNE — Real-Time Pitch Corrector</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --panel: #10161f;
+    --panel2: #161e2a;
+    --line: #223044;
+    --cyan: #35e0ff;
+    --cyan-dim: #1a8ba3;
+    --amber: #ffb347;
+    --text: #c8d6e5;
+    --muted: #5c6f85;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% -20%, #17222f 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .unit {
+    width: 100%;
+    max-width: 760px;
+    background: linear-gradient(180deg, var(--panel2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 {
+    font-size: 22px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-shadow: 0 0 18px rgba(53,224,255,.45);
+  }
+  header .sub { font-size: 10px; letter-spacing: 2px; color: var(--muted); }
+  header .led {
+    margin-left: auto;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #333; box-shadow: none;
+    transition: all .2s;
+  }
+  header .led.on { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+
+  .display { padding: 20px 22px; display: grid; grid-template-columns: 170px 1fr; gap: 18px; }
+  .note-readout {
+    background: #060a10;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  #noteName {
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--cyan);
+    text-shadow: 0 0 24px rgba(53,224,255,.5);
+    min-height: 62px;
+    line-height: 62px;
+  }
+  #freqText { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  .meter-wrap { display: flex; flex-direction: column; gap: 12px; }
+  .meter {
+    position: relative;
+    height: 44px;
+    background: #060a10;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .meter .scale {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(90deg, transparent 49.8%, rgba(53,224,255,.35) 49.8%, rgba(53,224,255,.35) 50.2%, transparent 50.2%),
+      repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), rgba(92,111,133,.25) calc(10% - 1px), rgba(92,111,133,.25) 10%);
+  }
+  .meter .labels {
+    position: absolute; inset: 0;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding: 0 8px 3px; font-size: 9px; color: var(--muted);
+  }
+  #needle {
+    position: absolute; top: 4px; bottom: 12px; left: 50%;
+    width: 3px; border-radius: 2px;
+    background: var(--amber);
+    box-shadow: 0 0 10px var(--amber);
+    transform: translateX(-50%);
+    transition: left .06s linear;
+  }
+  .piano { display: flex; gap: 3px; height: 46px; }
+  .key {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #1b2534;
+    display: flex; align-items: flex-end; justify-content: center;
+    font-size: 9px; color: var(--muted); padding-bottom: 3px;
+    transition: all .08s;
+  }
+  .key.black { background: #0b1118; }
+  .key.detected { border-color: var(--amber); color: var(--amber); box-shadow: inset 0 0 12px rgba(255,179,71,.25); }
+  .key.target { background: var(--cyan-dim); color: #04222b; border-color: var(--cyan); box-shadow: 0 0 14px rgba(53,224,255,.35); }
+
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 20px;
+    padding: 4px 22px 20px;
+  }
+  .ctl label { display: block; font-size: 10px; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 6px; }
+  .ctl .val { color: var(--cyan); float: right; }
+  select, input[type=range] { width: 100%; accent-color: var(--cyan); }
+  select {
+    background: #060a10; color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 8px; font-family: inherit; font-size: 12px;
+  }
+  .toggle-row { display: flex; align-items: center; gap: 8px; padding-top: 16px; }
+  .toggle-row input { accent-color: var(--cyan); width: auto; }
+  .toggle-row span { font-size: 11px; letter-spacing: 1px; color: var(--muted); }
+
+  .transport {
+    display: flex; gap: 10px; align-items: center;
+    padding: 16px 22px;
+    border-top: 1px solid var(--line);
+    background: rgba(0,0,0,.25);
+  }
+  button {
+    font-family: inherit; font-size: 12px; letter-spacing: 1px;
+    padding: 10px 16px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--panel2); color: var(--text);
+    transition: all .15s;
+  }
+  button:hover { border-color: var(--cyan-dim); color: var(--cyan); }
+  button.primary { border-color: var(--cyan-dim); color: var(--cyan); box-shadow: 0 0 14px rgba(53,224,255,.12); }
+  button:disabled { opacity: .4; cursor: default; }
+  #status { margin-left: auto; font-size: 11px; color: var(--muted); text-align: right; }
+  footer { padding: 10px 22px 14px; font-size: 10px; color: var(--muted); background: rgba(0,0,0,.25); }
+</style>
+</head>
+<body>
+<div class="unit">
+  <header>
+    <h1>ASTRA-TUNE</h1>
+    <span class="sub">REAL-TIME PITCH CORRECTOR &middot; EVO CLASS</span>
+    <span class="led" id="led"></span>
+  </header>
+
+  <section class="display">
+    <div class="note-readout">
+      <div id="noteName">--</div>
+      <div id="freqText">0.0 Hz</div>
+    </div>
+    <div class="meter-wrap">
+      <div class="meter">
+        <div class="scale"></div>
+        <div class="labels"><span>-50&cent;</span><span>0</span><span>+50&cent;</span></div>
+        <div id="needle"></div>
+      </div>
+      <div class="piano" id="piano"></div>
+    </div>
+  </section>
+
+  <section class="controls">
+    <div class="ctl">
+      <label>KEY</label>
+      <select id="key"></select>
+    </div>
+    <div class="ctl">
+      <label>SCALE</label>
+      <select id="scale">
+        <option value="major">Major</option>
+        <option value="minor">Natural Minor</option>
+        <option value="majpent">Major Pentatonic</option>
+        <option value="minpent">Minor Pentatonic</option>
+        <option value="chromatic">Chromatic</option>
+      </select>
+    </div>
+    <div class="toggle-row">
+      <input type="checkbox" id="bypass"><span>BYPASS</span>
+    </div>
+    <div class="ctl">
+      <label>RETUNE SPEED <span class="val" id="retuneVal">HARD (0 ms)</span></label>
+      <input type="range" id="retune" min="0" max="400" value="0" step="5">
+    </div>
+    <div class="ctl">
+      <label>HUMANIZE <span class="val" id="humanizeVal">0%</span></label>
+      <input type="range" id="humanize" min="0" max="100" value="0">
+    </div>
+    <div class="ctl">
+      <label>MIX <span class="val" id="mixVal">100%</span></label>
+      <input type="range" id="mix" min="0" max="100" value="100">
+    </div>
+  </section>
+
+  <section class="transport">
+    <button id="micBtn" class="primary">&#127908; LIVE MIC</button>
+    <button id="demoBtn">&#9654; DEMO VOICE</button>
+    <button id="stopBtn" disabled>&#9632; STOP</button>
+    <div id="status">idle</div>
+  </section>
+
+  <footer>&#9888; Use headphones with LIVE MIC to avoid feedback. Demo voice is a synthesized off-key singer &mdash; hear it snap to scale.</footer>
+</div>
+
+<script>
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const SCALES = {
+  major:     [1,0,1,0,1,1,0,1,0,1,0,1],
+  minor:     [1,0,1,1,0,1,0,1,1,0,1,0],
+  majpent:   [1,0,1,0,1,0,0,1,0,1,0,0],
+  minpent:   [1,0,0,1,0,1,0,1,0,0,1,0],
+  chromatic: [1,1,1,1,1,1,1,1,1,1,1,1],
+};
+
+const $ = (id) => document.getElementById(id);
+let ctx = null, node = null, srcNode = null, micStream = null;
+let demo = null, latest = null;
+
+// build key selector + piano strip
+NOTE_NAMES.forEach((n, i) => {
+  const opt = document.createElement('option');
+  opt.value = i; opt.textContent = n;
+  $('key').appendChild(opt);
+});
+const keyEls = NOTE_NAMES.map((n) => {
+  const el = document.createElement('div');
+  el.className = 'key' + (n.includes('#') ? ' black' : '');
+  el.textContent = n;
+  $('piano').appendChild(el);
+  return el;
+});
+
+function sendParams() {
+  if (!node) return;
+  node.port.postMessage({
+    retuneMs: +$('retune').value,
+    humanize: +$('humanize').value / 100,
+    mix: +$('mix').value / 100,
+    bypass: $('bypass').checked,
+    keyRoot: +$('key').value,
+    scaleMask: SCALES[$('scale').value],
+  });
+}
+['retune','humanize','mix','bypass','key','scale'].forEach((id) =>
+  $(id).addEventListener('input', () => { updateLabels(); sendParams(); }));
+
+function updateLabels() {
+  const r = +$('retune').value;
+  $('retuneVal').textContent = r === 0 ? 'HARD (0 ms)' : r + ' ms';
+  $('humanizeVal').textContent = $('humanize').value + '%';
+  $('mixVal').textContent = $('mix').value + '%';
+}
+
+async function ensureAudio() {
+  if (!ctx) {
+    ctx = new AudioContext();
+    await ctx.audioWorklet.addModule('tuner-worklet.js');
+    node = new AudioWorkletNode(ctx, 'tuner', { outputChannelCount: [1] });
+    const comp = ctx.createDynamicsCompressor();
+    node.connect(comp).connect(ctx.destination);
+    node.port.onmessage = (e) => { latest = e.data; window.__tunerDebug = e.data; };
+    sendParams();
+  }
+  await ctx.resume();
+}
+
+function stopSources() {
+  if (srcNode) { try { srcNode.disconnect(); } catch (e) {} srcNode = null; }
+  if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  if (demo) {
+    clearInterval(demo.timer);
+    try { demo.osc.stop(); demo.vib.stop(); } catch (e) {}
+    demo = null;
+  }
+}
+
+function setRunning(running, label) {
+  $('led').classList.toggle('on', running);
+  $('stopBtn').disabled = !running;
+  $('micBtn').disabled = running;
+  $('demoBtn').disabled = running;
+  $('status').textContent = label;
+}
+
+$('micBtn').addEventListener('click', async () => {
+  try {
+    await ensureAudio();
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    stopDemoOnly();
+    srcNode = ctx.createMediaStreamSource(micStream);
+    srcNode.connect(node);
+    setRunning(true, 'live mic → correcting');
+  } catch (err) {
+    $('status').textContent = 'mic unavailable: ' + err.name;
+  }
+});
+
+function stopDemoOnly() {
+  if (demo) { clearInterval(demo.timer); try { demo.osc.stop(); demo.vib.stop(); } catch (e) {} demo = null; }
+}
+
+$('demoBtn').addEventListener('click', async () => {
+  await ensureAudio();
+  stopSources();
+
+  // synthesized "singer": sawtooth + formant-ish filtering + vibrato,
+  // stepping through a melody with deliberate off-pitch offsets
+  const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+  const vib = ctx.createOscillator(); vib.frequency.value = 5.5;
+  const vibGain = ctx.createGain(); vibGain.gain.value = 18; // cents
+  vib.connect(vibGain).connect(osc.detune);
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400; lp.Q.value = 0.7;
+  const formant = ctx.createBiquadFilter(); formant.type = 'peaking'; formant.frequency.value = 700; formant.gain.value = 6;
+  const gain = ctx.createGain(); gain.gain.value = 0.35;
+  osc.connect(lp).connect(formant).connect(gain).connect(node);
+
+  const melody = [57, 59, 60, 62, 64, 65, 67, 64, 62, 60]; // A3..G4 walk
+  let step = 0;
+  const stepMelody = () => {
+    const m = melody[step % melody.length]; step++;
+    const cents = (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 45); // deliberately off-key
+    const f = 440 * Math.pow(2, (m - 69) / 12) * Math.pow(2, cents / 1200);
+    osc.frequency.setTargetAtTime(f, ctx.currentTime, 0.04);
+  };
+  stepMelody();
+  osc.start(); vib.start();
+  demo = { osc, vib, timer: setInterval(stepMelody, 550) };
+  srcNode = gain;
+  setRunning(true, 'demo voice → correcting');
+});
+
+$('stopBtn').addEventListener('click', () => {
+  stopSources();
+  setRunning(false, 'idle');
+  $('noteName').textContent = '--';
+  $('freqText').textContent = '0.0 Hz';
+  latest = null;
+});
+
+// UI refresh loop
+function draw() {
+  requestAnimationFrame(draw);
+  keyEls.forEach((el) => el.classList.remove('detected', 'target'));
+  if (latest && latest.freq > 0 && latest.targetMidi !== null) {
+    const t = latest.targetMidi;
+    $('noteName').textContent = NOTE_NAMES[((t % 12) + 12) % 12] + (Math.floor(t / 12) - 1);
+    $('freqText').textContent = latest.freq.toFixed(1) + ' Hz';
+    const cents = Math.max(-50, Math.min(50, (latest.midi - t) * 100));
+    $('needle').style.left = (50 + cents) + '%';
+    keyEls[((Math.round(latest.midi) % 12) + 12) % 12].classList.add('detected');
+    keyEls[((t % 12) + 12) % 12].classList.add('target');
+  } else if (latest) {
+    $('noteName').textContent = '--';
+    $('freqText').textContent = 'no pitch';
+    $('needle').style.left = '50%';
+  }
+}
+updateLabels();
+draw();
+</script>
+</body>
+</html>
