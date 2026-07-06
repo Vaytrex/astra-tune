@@ -148,6 +148,7 @@
 
   /* ---------------- live demo ---------------- */
   let audio = null, node = null, srcNode = null, micStream = null, demoVoice = null, latest = null;
+  let micGain = null, micLabel = '', micSilenceStart = null, silenceHintShown = false;
 
   NOTE_NAMES.forEach((n, i) => {
     const opt = document.createElement('option');
@@ -183,6 +184,11 @@
       const comp = audio.createDynamicsCompressor();
       node.connect(comp).connect(audio.destination);
       node.port.onmessage = (e) => { latest = e.data; window.__tunerDebug = e.data; };
+      // mic goes through a modest boost; laptop mics are quiet and the
+      // compressor downstream catches anything hot
+      micGain = audio.createGain();
+      micGain.gain.value = 1.8;
+      micGain.connect(node);
       sendParams();
     }
     await audio.resume();
@@ -191,6 +197,8 @@
   const stopSources = () => {
     if (srcNode) { try { srcNode.disconnect(); } catch (e) {} srcNode = null; }
     if (micStream) { micStream.getTracks().forEach((tr) => tr.stop()); micStream = null; }
+    micSilenceStart = null;
+    silenceHintShown = false;
     if (demoVoice) {
       clearInterval(demoVoice.timer);
       try { demoVoice.osc.stop(); demoVoice.vib.stop(); } catch (e) {}
@@ -254,7 +262,26 @@
     setRunning(true, 'demo singer running');
   });
 
-  $('micBtn').addEventListener('click', async () => {
+  const micDeviceField = $('micDeviceField');
+  const populateMicDevices = async (currentId) => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
+      if (devs.length === 0) return;
+      const sel = $('demoMicDevice');
+      sel.innerHTML = '';
+      devs.forEach((d, i) => {
+        const o = document.createElement('option');
+        o.value = d.deviceId;
+        o.textContent = d.label || 'Microphone ' + (i + 1);
+        sel.appendChild(o);
+      });
+      if (currentId) sel.value = currentId;
+      if (devs.length > 1) micDeviceField.hidden = false;
+    } catch (e) {}
+  };
+
+  const startMic = async (deviceId) => {
     clearMicError();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showMicError('<strong>This browser cannot capture the microphone.</strong> Try a current version of Chrome, Safari, Edge or Firefox over https.');
@@ -263,29 +290,38 @@
     try {
       $('demoFreq').textContent = 'requesting microphone, check the browser prompt';
       await ensureAudio();
+      const tuned = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+      if (deviceId) tuned.deviceId = { exact: deviceId };
       let stream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-        });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: tuned });
       } catch (err) {
         // Some browsers reject the tuned constraints; retry with plain audio
         // before reporting anything to the user.
         if (err && (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError'))
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream = await navigator.mediaDevices.getUserMedia({ audio: deviceId ? { deviceId: { exact: deviceId } } : true });
         else
           throw err;
       }
       stopSources();
       micStream = stream;
+      const track = stream.getAudioTracks()[0];
+      micLabel = (track && track.label) || 'default input';
       srcNode = audio.createMediaStreamSource(stream);
-      srcNode.connect(node);
-      setRunning(true, 'live mic running, sing a note');
+      srcNode.connect(micGain);
+      setRunning(true, 'mic: ' + micLabel.slice(0, 34));
+      micSilenceStart = performance.now();
+      silenceHintShown = false;
+      const settings = track && track.getSettings ? track.getSettings() : {};
+      populateMicDevices(settings.deviceId || deviceId);
     } catch (err) {
       setRunning(false, 'idle');
       showMicError(micErrorMessage(err));
     }
-  });
+  };
+
+  $('micBtn').addEventListener('click', () => startMic());
+  $('demoMicDevice').addEventListener('change', (e) => startMic(e.target.value));
 
   $('stopBtn').addEventListener('click', () => {
     stopSources();
@@ -301,6 +337,20 @@
     requestAnimationFrame(tick);
     if (latest && typeof latest.level === 'number')
       $('demoLevel').style.width = Math.min(100, Math.round(latest.level * 700)) + '%';
+    // silence watchdog: mic connected but nothing arriving is the most common
+    // "it does not work" case (wrong input device or input volume at zero)
+    if (micStream) {
+      const lvl = latest && latest.level ? latest.level : 0;
+      if (lvl > 0.003) {
+        micSilenceStart = performance.now();
+        if (silenceHintShown) { clearMicError(); silenceHintShown = false; }
+      } else if (!silenceHintShown && micSilenceStart && performance.now() - micSilenceStart > 3500) {
+        silenceHintShown = true;
+        showMicError('<strong>The microphone is connected but silent.</strong> Nothing is arriving from "' + micLabel + '". Raise the input volume in System Settings, then Sound, then Input, or pick a different microphone in the list above. On iPhone, flip off the silent side switch.');
+        populateMicDevices();
+        micDeviceField.hidden = false;
+      }
+    }
     if (latest && latest.freq > 0 && latest.targetMidi !== null && latest.targetMidi >= 0) {
       const tm = latest.targetMidi;
       $('demoNote').textContent = NOTE_NAMES[((tm % 12) + 12) % 12] + (Math.floor(tm / 12) - 1);
