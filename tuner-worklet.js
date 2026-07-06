@@ -68,6 +68,7 @@ class TunerProcessor extends AudioWorkletProcessor {
     let rms = 0;
     for (let i = 0; i < N; i++) rms += lin[i] * lin[i];
     rms = Math.sqrt(rms / N);
+    this.level = rms;
     if (rms < 0.004) { this.freq = 0; this.clarity = 0; return; }
 
     const half = N >> 1;
@@ -135,6 +136,7 @@ class TunerProcessor extends AudioWorkletProcessor {
         midi: this.midi,
         targetMidi: this.targetMidi,
         shift: this.shift,
+        level: this.level || 0,
       });
     }
   }

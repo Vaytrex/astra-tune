@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
 
@@ -54,6 +54,7 @@
       <div class="demo-note" id="demoNote">--</div>
       <div class="demo-freq" id="demoFreq">idle</div>
       <div class="demo-meter"><div class="demo-needle" id="demoNeedle"></div></div>
+      <div class="demo-level" title="Input level"><div id="demoLevel"></div></div>
     </div>
     <div class="demo-controls">
       <div class="field">
@@ -84,6 +85,7 @@
       <button class="btn-mic" id="micBtn">Use my mic</button>
       <button class="btn-stop" id="stopBtn" disabled>Stop</button>
     </div>
+    <div class="mic-error" id="micError" role="alert" hidden></div>
     <p class="demo-note-line">Headphones recommended with the mic, or the room will sing along.</p>
   </div>
 </section>
@@ -161,6 +163,6 @@
   <a href="https://buymeacoffee.com/vaytrex" target="_blank" rel="noopener">Buy me a coffee</a>
 </footer>
 
-<script src="site.js"></script>
+<script src="site.js?v=2"></script>
 </body>
 </html>

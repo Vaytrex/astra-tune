@@ -178,7 +178,7 @@
   const ensureAudio = async () => {
     if (!audio) {
       audio = new AudioContext();
-      await audio.audioWorklet.addModule('tuner-worklet.js');
+      await audio.audioWorklet.addModule('tuner-worklet.js?v=2');
       node = new AudioWorkletNode(audio, 'tuner', { outputChannelCount: [1] });
       const comp = audio.createDynamicsCompressor();
       node.connect(comp).connect(audio.destination);
@@ -197,14 +197,30 @@
       demoVoice = null;
     }
   };
+  // Buttons stay enabled while running so users can switch source directly;
+  // each start handler stops the previous source first.
   const setRunning = (running, label) => {
     $('stopBtn').disabled = !running;
-    $('demoVoiceBtn').disabled = running;
-    $('micBtn').disabled = running;
     $('demoFreq').textContent = label;
   };
 
+  const micError = $('micError');
+  const showMicError = (html) => { micError.innerHTML = html; micError.hidden = false; };
+  const clearMicError = () => { micError.hidden = true; };
+
+  const micErrorMessage = (err) => {
+    const name = err && err.name ? err.name : 'UnknownError';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError')
+      return '<strong>Microphone access is blocked.</strong> Click the mic or lock icon in the address bar and allow the microphone, then try again. On a Mac, also check System Settings, then Privacy and Security, then Microphone, and make sure your browser is switched on.';
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError')
+      return '<strong>No microphone was found.</strong> Plug in or select an input device in your system sound settings, then try again.';
+    if (name === 'NotReadableError' || name === 'AbortError' || name === 'TrackStartError')
+      return '<strong>The microphone could not start.</strong> Another app may be using it, or the system is blocking the browser. Close other apps that use the mic, or check System Settings, then Privacy and Security, then Microphone.';
+    return '<strong>The microphone could not start</strong> (' + name + '). Reload the page and try again.';
+  };
+
   $('demoVoiceBtn').addEventListener('click', async () => {
+    clearMicError();
     await ensureAudio();
     stopSources();
     const osc = audio.createOscillator();
@@ -239,31 +255,52 @@
   });
 
   $('micBtn').addEventListener('click', async () => {
+    clearMicError();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showMicError('<strong>This browser cannot capture the microphone.</strong> Try a current version of Chrome, Safari, Edge or Firefox over https.');
+      return;
+    }
     try {
+      $('demoFreq').textContent = 'requesting microphone, check the browser prompt';
       await ensureAudio();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        });
+      } catch (err) {
+        // Some browsers reject the tuned constraints; retry with plain audio
+        // before reporting anything to the user.
+        if (err && (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError'))
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        else
+          throw err;
+      }
       stopSources();
       micStream = stream;
       srcNode = audio.createMediaStreamSource(stream);
       srcNode.connect(node);
-      setRunning(true, 'live mic running');
+      setRunning(true, 'live mic running, sing a note');
     } catch (err) {
-      $('demoFreq').textContent = 'mic unavailable (' + err.name + ')';
+      setRunning(false, 'idle');
+      showMicError(micErrorMessage(err));
     }
   });
 
   $('stopBtn').addEventListener('click', () => {
     stopSources();
+    clearMicError();
     setRunning(false, 'idle');
     $('demoNote').textContent = '--';
     $('demoNeedle').style.left = '50%';
+    $('demoLevel').style.width = '0%';
     latest = null;
   });
 
   const tick = () => {
     requestAnimationFrame(tick);
+    if (latest && typeof latest.level === 'number')
+      $('demoLevel').style.width = Math.min(100, Math.round(latest.level * 700)) + '%';
     if (latest && latest.freq > 0 && latest.targetMidi !== null && latest.targetMidi >= 0) {
       const tm = latest.targetMidi;
       $('demoNote').textContent = NOTE_NAMES[((tm % 12) + 12) % 12] + (Math.floor(tm / 12) - 1);
