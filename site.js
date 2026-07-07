@@ -184,10 +184,9 @@
       const comp = audio.createDynamicsCompressor();
       node.connect(comp).connect(audio.destination);
       node.port.onmessage = (e) => { latest = e.data; window.__tunerDebug = e.data; };
-      // mic goes through a modest boost; laptop mics are quiet and the
-      // compressor downstream catches anything hot
+      // mic input gain, user adjustable; compressor downstream catches peaks
       micGain = audio.createGain();
-      micGain.gain.value = 1.8;
+      micGain.gain.value = (+$('demoGain').value) / 100;
       micGain.connect(node);
       sendParams();
     }
@@ -310,6 +309,7 @@
       srcNode = audio.createMediaStreamSource(stream);
       srcNode.connect(micGain);
       setRunning(true, 'mic: ' + micLabel.slice(0, 34));
+      $('micGainField').hidden = false;
       micSilenceStart = performance.now();
       silenceHintShown = false;
       const settings = track && track.getSettings ? track.getSettings() : {};
@@ -322,6 +322,10 @@
 
   $('micBtn').addEventListener('click', () => startMic());
   $('demoMicDevice').addEventListener('change', (e) => startMic(e.target.value));
+  $('demoGain').addEventListener('input', (e) => {
+    $('demoGainVal').textContent = e.target.value + '%';
+    if (micGain && audio) micGain.gain.setTargetAtTime((+e.target.value) / 100, audio.currentTime, 0.03);
+  });
 
   $('stopBtn').addEventListener('click', () => {
     stopSources();

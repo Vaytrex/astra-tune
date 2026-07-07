@@ -83,6 +83,10 @@
         <label for="demoMicDevice">Microphone</label>
         <select id="demoMicDevice"></select>
       </div>
+      <div class="field field-wide" id="micGainField" hidden>
+        <label for="demoGain">Input gain <span id="demoGainVal">100%</span></label>
+        <input type="range" id="demoGain" min="0" max="200" value="100">
+      </div>
     </div>
     <div class="demo-transport">
       <button class="btn-demo-voice" id="demoVoiceBtn">Demo singer</button>
@@ -167,6 +171,6 @@
   <a href="https://buymeacoffee.com/vaytrex" target="_blank" rel="noopener">Buy me a coffee</a>
 </footer>
 
-<script src="site.js?v=3"></script>
+<script src="site.js?v=4"></script>
 </body>
 </html>
